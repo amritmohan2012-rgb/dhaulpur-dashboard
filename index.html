@@ -359,6 +359,16 @@ function render(){
  $('#j-mat').onchange=e=>{st.jm=+e.target.value;journey()};$('#j-d').onchange=e=>{st.jd=e.target.value;journey()};
  st.jm=jm;journey();
 }
+function hav(a,b,c,d){const R=6371,t=x=>x*Math.PI/180,dl=t(c-a),dn=t(d-b);const q=Math.sin(dl/2)**2+Math.cos(t(a))*Math.cos(t(c))*Math.sin(dn/2)**2;return 2*R*Math.asin(Math.sqrt(q))}
+function outPlace(a,g){
+ if(!a.olat)return{txt:'location not recorded'};
+ const fmt=k=>k<1?Math.round(k*1000)+' m':k.toFixed(1)+' km';
+ const ds=a.slat?hav(a.olat,a.olng,a.slat,a.slng):null;
+ if(ds!=null&&ds<=0.5)return{txt:'near the start-of-day location'+(a.sloc?' ('+a.sloc+')':'')+', '+fmt(ds)+' away'};
+ let best=null;a.v.forEach(v=>{if(v.lat){const k=hav(a.olat,a.olng,v.lat,v.lng);if(!best||k<best.k)best={k,n:v.vn}}});
+ if(best&&best.k<=3)return{txt:'near '+(best.n||'a visited village')+', '+fmt(best.k)+' from the nearest visit'};
+ return{txt:(ds!=null?fmt(ds)+' from the start-of-day location':'GPS point only')+(best?'; nearest visit was '+fmt(best.k)+' away ('+(best.n||'village')+')':'')};
+}
 function journey(){
  const out=$('#j-out');const id=st.jm,d=st.jd;const a=A[id+'|'+d];
  if(!a){const s=status(id,d);out.innerHTML=`<div class="warn"><b>${esc(mname(id))}, ${dmy(d)} (${DOWN[dow(d)]}):</b> ${lab[s]||'No data'}. No working report entry for this day.</div>`;return}
@@ -366,12 +376,12 @@ function journey(){
  const chips=`<div class="dpl"><div class="chip">Login <b>${a.in||'-'}</b></div><div class="chip">Sign-out <b>${a.out||'not recorded'}</b></div><div class="chip">Hours <b>${a.hrs==null?'-':a.hrs.toFixed(1)}</b></div><div class="chip">Villages <b>${g.length}</b></div><div class="chip">RWE visits <b>${a.v.length}</b></div></div>`;
  let tl=`<ul class="tl"><li class="s"><b>${a.in||'-'}</b> Start of day${a.sloc?': '+esc(a.sloc):''}</li>`;
  g.forEach((s,i)=>{const spent=(mins(s.last)-mins(s.first));const seen=new Set();const rl=s.r.filter(v=>v.rid&&!seen.has(v.rid)&&seen.add(v.rid)).map(v=>`<span class="r">${esc(v.nm||pname(+v.rid))} ${catBadge(+v.rid)}</span>`).join('');tl+=`<li><b>${s.first}</b> ${esc(s.vn||'Village')} (${s.n} ${s.n>1?'visits':'visit'}${s.n>1&&spent>0?', first to last log '+spent+' min':''})${rl?`<div class="rl">${rl}</div>`:''}</li>`});
- tl+=`<li class="e"><b>${a.out||'-'}</b> ${a.out?'Sign-out':'No sign-out recorded'}</li></ul>`;
+ const so=outPlace(a,g);tl+=`<li class="e"><b>${a.out||'-'}</b> ${a.out?'Sign-out':'No sign-out recorded'}${a.olat?`: ${esc(so.txt)}<div class="rl"><a href="https://www.google.com/maps?q=${a.olat},${a.olng}" target="_blank" rel="noopener">${(+a.olat).toFixed(5)}, ${(+a.olng).toFixed(5)}</a> (GPS point, open in Google Maps)</div>`:''}</li></ul>`;
  out.innerHTML=chips+`<div class="grid2"><div id="j-map"></div><div>${tl}</div></div>`;
  const pts=[],ln=[];
  if(a.slat)pts.push({lat:a.slat,lng:a.slng,r:8,c:'#5a9e6f',txt:'S',info:`<b>Start</b> ${a.in||''}<br>${esc(a.sloc||'')}`});
  g.forEach((s,i)=>{if(s.la.length)pts.push({lat:avg(s.la),lng:avg(s.lo),r:9,c:'#f7b133',txt:String(i+1),info:`<b>${i+1}. ${esc(s.vn||'')}</b><br>${s.first}${s.n>1?' to '+s.last:''} | ${s.n} RWE ${s.n>1?'visits':'visit'}<br>By category: ${catMix(s.r.reduce((a,v)=>{if(!v.rid)return a;const c=catOf(+v.rid);a[c]=(a[c]||0)+1;return a},{}))}`})});
- if(a.olat)pts.push({lat:a.olat,lng:a.olng,r:8,c:'#434343',txt:'E',info:`<b>Sign-out</b> ${a.out||''}`});
+ if(a.olat)pts.push({lat:a.olat,lng:a.olng,r:8,c:'#434343',txt:'E',info:`<b>Sign-out</b> ${a.out||''}<br>${esc(outPlace(a,g).txt)}<br>${(+a.olat).toFixed(5)}, ${(+a.olng).toFixed(5)}`});
  ln.push({pts:pts.map(p=>[p.lat,p.lng]),c:'#434343',dash:true});
  drawMap($('#j-map'),pts,ln);
 }
