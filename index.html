@@ -289,8 +289,17 @@ function render(){
  h+=card('Where training happened','Dots sized by sessions, coloured by block. Tap a dot for details.',blockLegend()+'<div id="t-map"></div>');
  const q=st.q.toLowerCase();
  const log=rows.slice().sort((a,b)=>(b[0]+b[8]).localeCompare(a[0]+a[8])).filter(t=>!q||(pname(t[4])+' '+t[4]+' '+mname(t[1])+' '+(t[7]||'')).toLowerCase().includes(q));
- h+=card('Training log',`${num(log.length)} sessions, newest first`,`<div class="dpl"><input type="search" id="t-q" placeholder="Search name, ID, MAT or village" value="${esc(st.q)}" style="min-width:240px"></div>`+tbl([{h:'Date',k:r=>dmy(r[0])+' '+r[8]},{h:'MAT',k:r=>esc(mname(r[1]))},{h:'Role',k:r=>roleLbl(r)},{h:'RWE ID',k:r=>r[4]},{h:'Trained person',k:r=>esc(pname(r[4]))},{h:'RWE category',k:r=>catBadge(r[4])},{h:'Village',k:r=>esc(r[7]||'-')},{h:'Block',k:r=>esc(tblk(r))}],log.slice(0,st.lim))+(log.length>st.lim?`<button class="more" id="t-more">Show more</button>`:''));
+ h+=card('Training log',`${num(log.length)} sessions, newest first`,`<div class="dpl"><input type="search" id="t-q" placeholder="Search name, ID, MAT or village" value="${esc(st.q)}" style="min-width:240px"><button class="more" style="margin:0" onclick="dlx('log')">Download Excel</button></div>`+tbl([{h:'Date',k:r=>dmy(r[0])+' '+r[8]},{h:'MAT',k:r=>esc(mname(r[1]))},{h:'Role',k:r=>roleLbl(r)},{h:'RWE ID',k:r=>r[4]},{h:'Trained person',k:r=>esc(pname(r[4]))},{h:'RWE category',k:r=>catBadge(r[4])},{h:'Village',k:r=>esc(r[7]||'-')},{h:'Block',k:r=>esc(tblk(r))}],log.slice(0,st.lim))+(log.length>st.lim?`<button class="more" id="t-more">Show more</button>`:''));
+
+ // visited but no WIDB training
+ const trained=new Set(TR.map(t=>+t[4]));const vis={};
+ D.att.forEach(a=>{if(st.mat!=='All'&&String(a.id)!==st.mat)return;if(st.mon!=='All'&&a.d.slice(0,7)!==st.mon)return;if(st.from&&a.d<st.from)return;if(st.to&&a.d>st.to)return;a.v.forEach(v=>{if(!v.rid)return;const id=+v.rid;if(trained.has(id))return;const p=PPL[id]||[];if(st.blk!=='All'&&p[2]!==st.blk)return;if(st.cat!=='All'&&catOf(id)!==st.cat)return;const o=vis[id]||(vis[id]={id,nm:p[0]||v.nm||('ID '+id),role:p[5]||'-',vn:v.vn||(VIL[p[3]]||{}).vn||'-',blk:p[2]||'-',n:0,first:a.d,last:a.d,mat:a.id});o.n++;if(a.d<o.first)o.first=a.d;if(a.d>=o.last){o.last=a.d;if(v.vn)o.vn=v.vn}})});
+ const vl=Object.values(vis).sort((a,b)=>b.last.localeCompare(a.last)||b.n-a.n||a.nm.localeCompare(b.nm));
+ window._xd={log:{f:'WIDB_training_log',s:'Training log',h:['Date','Time','MAT','Role','RWE ID','Trained person','RWE category','Village','Block'],r:log.map(r=>[r[0],r[8],mname(r[1]),roleLbl(r),r[4],pname(r[4]),CLAB[catOf(r[4])]||catOf(r[4]),r[7]||'',tblk(r)])},
+  vis:{f:'Visited_no_WIDB_training',s:'Visited no WIDB',h:['RWE ID','Name','Role','RWE category','Village (last visit)','Block','MAT','Visits','First visit','Last visit'],r:vl.map(r=>[r.id,r.nm,r.role,CLAB[catOf(r.id)]||catOf(r.id),r.vn,r.blk,mname(r.mat),r.n,r.first,r.last])}};
+ h+=card('Visited but WIDB training not done',`${num(vl.length)} RWE / SS visited by the MAT but with no WIDB session on the MAT app`,`<div class="dpl"><button class="more" style="margin:0" onclick="dlx('vis')">Download Excel</button></div><div class="note" style="margin:6px 0 10px">A person is listed when the MAT logged a visit to them in the working report and no WIDB training form exists for them at all (any date). The block, MAT, month, date range and category filters above apply to the visits. Sorted by latest visit.</div>`+tbl([{h:'RWE ID',k:r=>r.id},{h:'Name',k:r=>esc(r.nm),l:1},{h:'Role',k:r=>r.role,l:1},{h:'RWE category',k:r=>catBadge(r.id)},{h:'Village',k:r=>esc(r.vn),l:1},{h:'Block',k:r=>esc(r.blk),l:1},{h:'MAT',k:r=>esc(mname(r.mat)),l:1},{h:'Visits',k:r=>r.n},{h:'First visit',k:r=>dmy(r.first)},{h:'Last visit',k:r=>dmy(r.last)}],vl.slice(0,st.vlim||40))+(vl.length>(st.vlim||40)?`<button class="more" id="v-more">Show more</button>`:''));
  root.innerHTML=h;
+ const vmo=$('#v-more');if(vmo)vmo.onclick=()=>keepY(()=>{st.vlim=(st.vlim||40)+60;render()});
  const vm={};rows.forEach(t=>{const k=t[6];if(!k)return;(vm[k]||(vm[k]={n:0,c:{}}));vm[k].n++;const c=catOf(t[4]);vm[k].c[c]=(vm[k].c[c]||0)+1});
  const pts=Object.entries(vm).map(([vc,o])=>{const v=VIL[vc];if(!v)return null;return{lat:v.lat,lng:v.lng,r:4+Math.sqrt(o.n)*2.2,c:BCOL[v.blk]||'#999',info:`<b>${esc(v.vn)}</b> (${esc(v.blk)})<br>${o.n} WIDB sessions<br>By category: ${catMix(o.c)}`}}).filter(Boolean);
  drawMap($('#t-map'),pts,[]);
@@ -302,6 +311,10 @@ function render(){
  const qi=$('#t-q');qi.oninput=e=>{st.q=e.target.value;st.lim=40;const pos=e.target.selectionStart;render();const n=$('#t-q');n.focus();n.setSelectionRange(pos,pos)};
  const mo=$('#t-more');if(mo)mo.onclick=()=>{st.lim+=60;render()};
 }
+window.dlx=function(k){const x=window._xd&&window._xd[k];if(!x)return;const nm=x.f+'_'+new Date().toISOString().slice(0,10);
+ const csv=()=>{const q=v=>{v=v==null?'':String(v);return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v};const t='\ufeff'+[x.h,...x.r].map(r=>r.map(q).join(',')).join('\r\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([t],{type:'text/csv'}));a.download=nm+'.csv';document.body.appendChild(a);a.click();a.remove()};
+ const go=()=>{try{const wb=XLSX.utils.book_new();const ws=XLSX.utils.aoa_to_sheet([x.h,...x.r]);ws['!cols']=x.h.map((c,i)=>({wch:Math.min(40,Math.max(c.length,...x.r.slice(0,300).map(r=>String(r[i]==null?'':r[i]).length))+2)}));XLSX.utils.book_append_sheet(wb,ws,x.s);XLSX.writeFile(wb,nm+'.xlsx')}catch(e){csv()}};
+ if(window.XLSX)return go();const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';s.onload=go;s.onerror=csv;document.head.appendChild(s)};
 window.renderTrn=render;render();
 })();
 
